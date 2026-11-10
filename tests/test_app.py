@@ -48,5 +48,6 @@ async def test_health_is_degraded_when_component_is_down(client, monkeypatch):
     assert response.status_code == 503
     data = response.json()
     assert data["status"] == "degraded"
-    assert data["components"]["postgres"]["error"] == "db is down"
+    assert data["components"]["postgres"]["status"] == "unhealthy"
+    assert "db is down" not in response.text
     assert data["components"]["rabbitmq"]["status"] == "healthy"

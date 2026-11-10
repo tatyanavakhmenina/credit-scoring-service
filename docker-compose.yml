@@ -25,7 +25,7 @@ services:
       context: .
       args: {GIT_SHA: "${GIT_SHA:-local}"}
     environment: *app-env
-    ports: ["${APP_PORT:-8000}:8000"]
+    ports: ["127.0.0.1:${APP_PORT:-8000}:8000"]
     depends_on:
       db: {condition: service_healthy}
       rabbitmq: {condition: service_healthy}
@@ -78,7 +78,7 @@ services:
     environment:
       POSTGRES_DB: credit_scoring
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-    ports: ["${POSTGRES_PORT:-5433}:5432"]
+    ports: ["127.0.0.1:${POSTGRES_PORT:-5433}:5432"]
     volumes: [db-data:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d credit_scoring"]
@@ -97,8 +97,8 @@ services:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
     ports:
-      - "${RABBITMQ_PORT:-5672}:5672"
-      - "${RABBITMQ_UI_PORT:-15672}:15672"
+      - "127.0.0.1:${RABBITMQ_PORT:-5672}:5672"
+      - "127.0.0.1:${RABBITMQ_UI_PORT:-15672}:15672"
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
       - ./docker/rabbitmq/rabbitmq.conf:/etc/rabbitmq/conf.d/90-stats.conf:ro
@@ -124,7 +124,7 @@ services:
       AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-mlflowaccess}
       AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-mlflowsecret123}
       AWS_DEFAULT_REGION: us-east-1
-    ports: ["${MLFLOW_PORT:-5001}:5000"]
+    ports: ["127.0.0.1:${MLFLOW_PORT:-5001}:5000"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:5000/health', timeout=2)"]
       interval: 10s
@@ -165,7 +165,7 @@ services:
       RUSTFS_SECRET_KEY: ${S3_SECRET_KEY:-mlflowsecret123}
       RUSTFS_VOLUMES: /data
       RUSTFS_CONSOLE_ENABLE: "true"
-    ports: ["${S3_CONSOLE_PORT:-9001}:9001"]
+    ports: ["127.0.0.1:${S3_CONSOLE_PORT:-9001}:9001"]
     volumes: [s3-data:/data]
     healthcheck:
       test: ["CMD-SHELL", "curl -fs http://localhost:9000/health || wget -q --spider http://localhost:9000/health"]

@@ -24,6 +24,6 @@ os.execvp(
         f"--artifacts-destination=s3://{bucket}",
         "--default-artifact-root=mlflow-artifacts:/",
         "--serve-artifacts",
-        "--allowed-hosts=*",
+        "--allowed-hosts=mlflow,mlflow:5000,localhost,localhost:*,127.0.0.1:*",
     ],
 )
