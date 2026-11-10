@@ -1,0 +1,47 @@
+{
+  "sigterm_stop_seconds": {
+    "value": 1.2
+  },
+  "graceful_sigterm_no_loss_no_duplicates": {
+    "passed": true,
+    "expected": 600,
+    "rows_done": 600,
+    "not_done": 0,
+    "dlq": 0
+  },
+  "sigkill_redelivers_without_duplicates": {
+    "passed": true,
+    "expected": 600,
+    "rows_done": 600,
+    "not_done": 0,
+    "dlq": 0
+  },
+  "worker_health_responds_during_inference": {
+    "passed": true,
+    "max_ms": 32.4,
+    "unacked_at_end": 8
+  },
+  "health_batch": {
+    "passed": true,
+    "expected": 300,
+    "rows_done": 300,
+    "not_done": 0,
+    "dlq": 0
+  },
+  "poison_message_in_dlq": {
+    "passed": true,
+    "dlq_before": 0,
+    "dlq_after": 1
+  },
+  "api_503_with_retry_after_and_no_pending_leak": {
+    "passed": true,
+    "accepted": 201,
+    "rejected": 59,
+    "pending_rows": 201,
+    "in_queue": 201,
+    "retry_after": [
+      "10"
+    ],
+    "max_503_ms": 5.1
+  }
+}

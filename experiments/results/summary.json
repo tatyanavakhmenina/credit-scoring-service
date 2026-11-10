@@ -1,0 +1,64 @@
+{
+  "no_limits": {
+    "title": "Без ограничений (очередь и prefetch без лимита)",
+    "max_depth": 29335,
+    "max_rabbit_mb": 146.9,
+    "max_worker_mb": 233.8,
+    "max_source_mb": 41.7,
+    "done": 1520,
+    "steady": {
+      "source_rate": 279.1,
+      "worker_rate": 18.0,
+      "task_seconds": 54.9,
+      "mean_depth": 28810.8
+    }
+  },
+  "unbounded_queue": {
+    "title": "Очередь без лимита, prefetch=4",
+    "max_depth": 29452,
+    "max_rabbit_mb": 193.9,
+    "max_worker_mb": 179.4,
+    "max_source_mb": 41.7,
+    "done": 1449,
+    "steady": {
+      "source_rate": 273.0,
+      "worker_rate": 17.1,
+      "task_seconds": 55.3,
+      "mean_depth": 28903.0
+    }
+  },
+  "backpressure_1w": {
+    "title": "Backpressure, 1 воркер",
+    "max_depth": 205,
+    "max_rabbit_mb": 267.4,
+    "max_worker_mb": 180.1,
+    "max_source_mb": 41.8,
+    "done": 1436,
+    "steady": {
+      "source_rate": 16.7,
+      "worker_rate": 17.1,
+      "task_seconds": 10.3,
+      "mean_depth": 172.6
+    }
+  },
+  "backpressure_2w": {
+    "title": "Backpressure, второй воркер на 60-й секунде",
+    "max_depth": 201,
+    "max_rabbit_mb": 272.3,
+    "max_worker_mb": 371.2,
+    "max_source_mb": 41.8,
+    "done": 3900,
+    "before_scale": {
+      "source_rate": 17.2,
+      "worker_rate": 17.1,
+      "task_seconds": 10.3,
+      "mean_depth": 179.4
+    },
+    "after_scale": {
+      "source_rate": 34.4,
+      "worker_rate": 33.9,
+      "task_seconds": 5.1,
+      "mean_depth": 177.6
+    }
+  }
+}
