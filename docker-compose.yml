@@ -1,0 +1,185 @@
+x-logging: &logging
+  driver: json-file
+  options: {max-size: 10m, max-file: "3"}
+
+x-app-env: &app-env
+  DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/credit_scoring
+  RABBIT_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672/
+  MLFLOW_TRACKING_URI: http://mlflow:5000
+  MODEL_ALIAS: ${MODEL_ALIAS:-champion}
+  QUEUE_NAME: ${QUEUE_NAME:-scoring.tasks}
+  QUEUE_MAX_LENGTH: ${QUEUE_MAX_LENGTH:-200}
+  WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-4}
+  INFERENCE_DELAY_SECONDS: ${INFERENCE_DELAY_SECONDS:-0.2}
+
+x-app: &app
+  image: credit-scoring-service:local
+  restart: unless-stopped
+  logging: *logging
+  networks: [backend]
+
+services:
+  app:
+    <<: *app
+    build:
+      context: .
+      args: {GIT_SHA: "${GIT_SHA:-local}"}
+    environment: *app-env
+    ports: ["127.0.0.1:${APP_PORT:-8000}:8000"]
+    depends_on:
+      db: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+      mlflow: {condition: service_healthy}
+    deploy:
+      resources: {limits: {memory: 768m, cpus: "1.0"}}
+
+  worker:
+    <<: *app
+    command: >-
+      uvicorn credit_scoring.pipeline.worker:app --host 0.0.0.0 --port 8001
+      --no-access-log --timeout-graceful-shutdown 30
+    environment:
+      <<: *app-env
+      PREFETCH_COUNT: ${PREFETCH_COUNT:-4}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8001/healthz', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    stop_grace_period: 40s
+    depends_on:
+      db: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+      mlflow: {condition: service_healthy}
+    deploy:
+      resources: {limits: {memory: 768m, cpus: "1.0"}}
+
+  source:
+    <<: *app
+    profiles: [load]
+    restart: "no"
+    command: python -m credit_scoring.pipeline.source
+    healthcheck: {disable: true}
+    environment:
+      <<: *app-env
+      SOURCE_FILE: /data/credit_default.csv
+      SOURCE_BATCH_ID: ${SOURCE_BATCH_ID:-batch-1}
+      SOURCE_MAX_TASKS: ${SOURCE_MAX_TASKS:-30000}
+    volumes: ["./data:/data:ro"]
+    depends_on:
+      rabbitmq: {condition: service_healthy}
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    logging: *logging
+    networks: [backend]
+    environment:
+      POSTGRES_DB: credit_scoring
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports: ["127.0.0.1:${POSTGRES_PORT:-5433}:5432"]
+    volumes: [db-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d credit_scoring"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    deploy:
+      resources: {limits: {memory: 512m}}
+
+  rabbitmq:
+    image: rabbitmq:4.1-management-alpine
+    restart: unless-stopped
+    logging: *logging
+    networks: [backend]
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+    ports:
+      - "127.0.0.1:${RABBITMQ_PORT:-5672}:5672"
+      - "127.0.0.1:${RABBITMQ_UI_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+      - ./docker/rabbitmq/rabbitmq.conf:/etc/rabbitmq/conf.d/90-stats.conf:ro
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    deploy:
+      resources: {limits: {memory: 1g}}
+
+  mlflow:
+    build: docker/mlflow
+    image: credit-scoring-mlflow:local
+    restart: unless-stopped
+    logging: *logging
+    networks: [backend]
+    command: ["python", "/bootstrap.py"]
+    environment:
+      MLFLOW_BACKEND_URI: postgresql+psycopg2://mlflow:${MLFLOW_DB_PASSWORD:-mlflow}@mlflow-db:5432/mlflow
+      MLFLOW_BUCKET: mlflow
+      MLFLOW_S3_ENDPOINT_URL: http://s3:9000
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-mlflowaccess}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-mlflowsecret123}
+      AWS_DEFAULT_REGION: us-east-1
+    ports: ["127.0.0.1:${MLFLOW_PORT:-5001}:5000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:5000/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 18
+      start_period: 60s
+    depends_on:
+      mlflow-db: {condition: service_healthy}
+      s3: {condition: service_healthy}
+    deploy:
+      resources: {limits: {memory: 1536m}}
+
+  mlflow-db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    logging: *logging
+    networks: [backend]
+    environment:
+      POSTGRES_DB: mlflow
+      POSTGRES_USER: mlflow
+      POSTGRES_PASSWORD: ${MLFLOW_DB_PASSWORD:-mlflow}
+    volumes: [mlflow-db-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mlflow -d mlflow"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    deploy:
+      resources: {limits: {memory: 256m}}
+
+  s3:
+    image: rustfs/rustfs:latest
+    restart: unless-stopped
+    logging: *logging
+    networks: [backend]
+    environment:
+      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY:-mlflowaccess}
+      RUSTFS_SECRET_KEY: ${S3_SECRET_KEY:-mlflowsecret123}
+      RUSTFS_VOLUMES: /data
+      RUSTFS_CONSOLE_ENABLE: "true"
+    ports: ["127.0.0.1:${S3_CONSOLE_PORT:-9001}:9001"]
+    volumes: [s3-data:/data]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:9000/health || wget -q --spider http://localhost:9000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    deploy:
+      resources: {limits: {memory: 512m}}
+
+networks:
+  backend:
+
+volumes:
+  db-data:
+  rabbitmq-data:
+  mlflow-db-data:
+  s3-data:

@@ -1,0 +1,9 @@
+.git
+.github
+.venv
+data
+experiments
+tests
+training
+**/__pycache__
+.env

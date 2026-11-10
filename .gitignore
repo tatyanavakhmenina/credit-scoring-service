@@ -50,3 +50,6 @@ env/
 *.swo
 
 .env
+
+data/
+mlruns/
