@@ -1,34 +1,27 @@
-import time
-from importlib.metadata import PackageNotFoundError, version
+from fastapi import APIRouter, Request, Response, status
 
-from fastapi import APIRouter, status
-
-from credit_scoring.database import check_database_connection
+from credit_scoring import __version__
+from credit_scoring.api.health import check_components
+from credit_scoring.config import settings
 
 router = APIRouter()
 
 
-try:
-    APP_VERSION = version("credit-scoring-service")
-except PackageNotFoundError:
-    APP_VERSION = "0.1.0-dev"
-
-
 @router.get("/version", status_code=status.HTTP_200_OK)
 async def get_version():
-    return {"version": APP_VERSION}
+    return {"version": __version__, "git_sha": settings.git_sha}
 
 
-@router.get("/health", status_code=status.HTTP_200_OK)
-async def end_to_end_health():
-    start_time = time.perf_counter()
-    is_db_ok, db_error = await check_database_connection()
-    db_latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
-
-    db_status = "healthy" if is_db_ok else f"unhealthy: {db_error}"
-    overall_status = "healthy" if is_db_ok else "degraded"
-
+@router.get("/health")
+async def end_to_end_health(request: Request, response: Response):
+    components = await check_components(settings)
+    is_healthy = all(c["status"] == "healthy" for c in components.values())
+    response.status_code = (
+        status.HTTP_200_OK if is_healthy else status.HTTP_503_SERVICE_UNAVAILABLE
+    )
+    model = getattr(request.app.state, "model", None)
     return {
-        "status": overall_status,
-        "components": {"database": {"status": db_status, "latency_ms": db_latency_ms}},
+        "status": "healthy" if is_healthy else "degraded",
+        "components": components,
+        "model": model.info.__dict__ if model else None,
     }
